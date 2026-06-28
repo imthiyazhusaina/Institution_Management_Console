@@ -51,58 +51,135 @@ public class studentController {
             viewStudent.typePrint(reply,CYAN);
         }
     }
-    public static String getGeminiReply(String prompt) throws IOException {
-        history.add(new String[]{"user", prompt});
+//    public static String getGeminiReply(String prompt) throws IOException {
+//        history.add(new String[]{"user", prompt});
+//
+//        StringBuilder contentJson = new StringBuilder("\"contents\": [");
+//        for (String[] turn : history) {
+//            contentJson.append("{\"role\": \"")
+//                    .append(turn[0])
+//                    .append("\", \"parts\": [{\"text\": \"")
+//                    .append(turn[1].replace("\"", "\\\""))
+//                    .append("\"}]},");
+//        }
+//        contentJson.deleteCharAt(contentJson.length() - 1); // remove trailing comma
+//        contentJson.append("]");
+//
+//        URL url = new URL("https://api.x.ai/v1/chat/completions" + API_KEY);
+//        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+//        conn.setRequestMethod("POST");
+//        conn.setRequestProperty("Content-Type", "application/json");
+//        conn.setDoOutput(true);
+//
+//        String jsonInput = "{" + contentJson.toString() + "}";
+//
+//        try (OutputStream os = conn.getOutputStream()) {
+//            byte[] input = jsonInput.getBytes("utf-8");
+//            os.write(input, 0, input.length);
+//        }
+//
+//        int status = conn.getResponseCode();
+//        InputStream stream = (status == 200) ? conn.getInputStream() : conn.getErrorStream();
+//        BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "utf-8"));
+//        StringBuilder response = new StringBuilder();
+//        String line;
+//        while ((line = reader.readLine()) != null) {
+//            response.append(line.trim());
+//        }
+//        reader.close();
+//
+//        try {
+//            JSONObject obj = new JSONObject(response.toString());
+//            String reply = obj.getJSONArray("candidates")
+//                    .getJSONObject(0)
+//                    .getJSONObject("content")
+//                    .getJSONArray("parts")
+//                    .getJSONObject(0)
+//                    .getString("text").trim();
+//
+//            history.add(new String[]{"model", reply}); // Add reply to history
+//            return reply;
+//        } catch (Exception e) {
+//            return "❌ Couldn't parse reply. Full response:\n" + response;
+//        }
+//    }
+public static String getGeminiReply(String prompt) throws IOException {
 
-        StringBuilder contentJson = new StringBuilder("\"contents\": [");
-        for (String[] turn : history) {
-            contentJson.append("{\"role\": \"")
-                    .append(turn[0])
-                    .append("\", \"parts\": [{\"text\": \"")
-                    .append(turn[1].replace("\"", "\\\""))
-                    .append("\"}]},");
-        }
-        contentJson.deleteCharAt(contentJson.length() - 1); // remove trailing comma
-        contentJson.append("]");
+    history.add(new String[]{"user", prompt});
 
-        URL url = new URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + API_KEY);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json");
-        conn.setDoOutput(true);
+    StringBuilder messagesJson = new StringBuilder("\"messages\":[");
 
-        String jsonInput = "{" + contentJson.toString() + "}";
-
-        try (OutputStream os = conn.getOutputStream()) {
-            byte[] input = jsonInput.getBytes("utf-8");
-            os.write(input, 0, input.length);
-        }
-
-        int status = conn.getResponseCode();
-        InputStream stream = (status == 200) ? conn.getInputStream() : conn.getErrorStream();
-        BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "utf-8"));
-        StringBuilder response = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            response.append(line.trim());
-        }
-        reader.close();
-
-        try {
-            JSONObject obj = new JSONObject(response.toString());
-            String reply = obj.getJSONArray("candidates")
-                    .getJSONObject(0)
-                    .getJSONObject("content")
-                    .getJSONArray("parts")
-                    .getJSONObject(0)
-                    .getString("text").trim();
-
-            history.add(new String[]{"model", reply}); // Add reply to history
-            return reply;
-        } catch (Exception e) {
-            return "❌ Couldn't parse reply. Full response:\n" + response;
-        }
+    for (String[] turn : history) {
+        messagesJson.append("{")
+                .append("\"role\":\"").append(turn[0]).append("\",")
+                .append("\"content\":\"")
+                .append(turn[1]
+                        .replace("\\", "\\\\")
+                        .replace("\"", "\\\"")
+                        .replace("\n", "\\n"))
+                .append("\"},");
     }
+
+    messagesJson.deleteCharAt(messagesJson.length() - 1); // Remove trailing comma
+    messagesJson.append("]");
+
+    URL url = new URL("https://api.x.ai/v1/chat/completions");
+
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    conn.setRequestMethod("POST");
+    conn.setRequestProperty("Content-Type", "application/json");
+    conn.setRequestProperty("Authorization", "Bearer " + API_KEY);
+    conn.setDoOutput(true);
+
+    String jsonInput = "{"
+            + "\"model\":\"grok-4\","
+            + messagesJson.toString()
+            + "}";
+
+    try (OutputStream os = conn.getOutputStream()) {
+        byte[] input = jsonInput.getBytes("UTF-8");
+        os.write(input, 0, input.length);
+    }
+
+    int status = conn.getResponseCode();
+
+    InputStream stream = (status >= 200 && status < 300)
+            ? conn.getInputStream()
+            : conn.getErrorStream();
+
+    BufferedReader reader = new BufferedReader(
+            new InputStreamReader(stream, "UTF-8"));
+
+    StringBuilder response = new StringBuilder();
+    String line;
+
+    while ((line = reader.readLine()) != null) {
+        response.append(line);
+    }
+
+    reader.close();
+
+    if (status != 200) {
+        return "❌ API Error (" + status + "):\n" + response;
+    }
+
+    try {
+        JSONObject obj = new JSONObject(response.toString());
+
+        String reply = obj.getJSONArray("choices")
+                .getJSONObject(0)
+                .getJSONObject("message")
+                .getString("content")
+                .trim();
+
+        history.add(new String[]{"assistant", reply});
+
+        return reply;
+
+    } catch (Exception e) {
+        return "❌ Couldn't parse response.\n\n" + response;
+    }
+}
     private static void attendanceDetailsOption() {
         studentDOA.attendanceView(name);
     }
