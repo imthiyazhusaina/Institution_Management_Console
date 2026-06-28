@@ -70,7 +70,7 @@ InstituteManagementSystem
 ├── DOA/
 ├── model/
 ├── view/
-├── Util/
+├── Util/ (Private repo)
 ├── Service/
 └── app/
      |--- Main.java
